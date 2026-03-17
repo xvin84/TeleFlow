@@ -8,7 +8,6 @@ asyncio event loop. Взаимодействие через run_coroutine_thread
 from __future__ import annotations
 
 import asyncio
-import json
 import random
 import threading
 import uuid
@@ -292,7 +291,6 @@ class SchedulerManager:
 
         fut.add_done_callback(_on_done)
         logger.info(f"Submitted schedule {schedule_id} (mode={config.mode}, msg={msg_id})")
-        # DB save is done by the caller (async context) to avoid event loop conflicts
         return schedule_id
 
     def schedule_send_job(
@@ -331,7 +329,6 @@ class SchedulerManager:
             logger.error(f"Failed to list schedules: {e}")
             return []
 
-
     def remove_schedule(self, schedule_id: str) -> None:
         """Remove a schedule from APScheduler and from the metadata DB."""
         if not self._loop or not self._scheduler:
@@ -345,8 +342,6 @@ class SchedulerManager:
             logger.info(f"Schedule {schedule_id} removed from APScheduler.")
         except Exception as e:
             logger.error(f"Failed to remove schedule {schedule_id}: {e}")
-
-        # Caller is responsible for removing from teleflow.db if needed
 
     def pause_schedule(self, schedule_id: str) -> None:
         """Pause a schedule in APScheduler."""

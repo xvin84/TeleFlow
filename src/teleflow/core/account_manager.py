@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 from teleflow.core.storage.db import db
-from teleflow.utils.crypto import make_session_manager, SessionManager, _NO_PASSWORD_SENTINEL
+from teleflow.utils.crypto import make_session_manager, SessionManager
 from teleflow.core.telegram.client import TeleflowClient
 from teleflow.utils.logger import logger
 from teleflow.core.dispatch import register_client, unregister_client
@@ -26,7 +26,7 @@ class AccountManager:
         """Load all accounts from the database and connect them."""
         cursor = await db.execute("SELECT phone, api_id, api_hash, session_string, status FROM accounts")
         rows = await cursor.fetchall()
-        
+
         for row in rows:
             phone = row["phone"]
             try:
@@ -37,7 +37,7 @@ class AccountManager:
                     api_hash=row["api_hash"],
                     session_string=decrypted_session
                 )
-                
+
                 # Check connection in background
                 is_authorized = await client.connect()
                 if is_authorized:
@@ -47,7 +47,7 @@ class AccountManager:
                 else:
                     logger.warning(f"Account {phone} failed to authorize on load.")
                     await self.update_status(phone, "error")
-                    
+
             except Exception as e:
                 logger.error(f"Failed to load account {phone}: {e}")
                 await self.update_status(phone, "error")
@@ -63,14 +63,14 @@ class AccountManager:
     async def add_account(self, phone: str, api_id: int, api_hash: str, session_string: str) -> None:
         """Add a newly authenticated account to the database."""
         encrypted_session = self.session_manager.encrypt(session_string)
-        
+
         # If the account exists, update it
         try:
             await db.execute(
                 """
                 INSERT INTO accounts (phone, api_id, api_hash, session_string, status)
                 VALUES (?, ?, ?, ?, 'online')
-                ON CONFLICT(phone) DO UPDATE SET 
+                ON CONFLICT(phone) DO UPDATE SET
                     api_id=excluded.api_id,
                     api_hash=excluded.api_hash,
                     session_string=excluded.session_string,
@@ -80,12 +80,12 @@ class AccountManager:
                 (phone, api_id, api_hash, encrypted_session)
             )
             await db.commit()
-            
+
             # Add to active clients
             self.active_clients[phone] = TeleflowClient(
-                phone=phone, 
-                api_id=api_id, 
-                api_hash=api_hash, 
+                phone=phone,
+                api_id=api_id,
+                api_hash=api_hash,
                 session_string=session_string
             )
             await self.active_clients[phone].connect()
@@ -101,7 +101,7 @@ class AccountManager:
             await self.active_clients[phone].disconnect()
             del self.active_clients[phone]
             unregister_client(phone)
-            
+
         await db.execute("DELETE FROM accounts WHERE phone = ?", (phone,))
         await db.commit()
         logger.info(f"Account {phone} removed.")
@@ -147,4 +147,3 @@ class AccountManager:
         self._password = new_password
         self.session_manager = new_mgr
         logger.info("All sessions re-encrypted successfully.")
-

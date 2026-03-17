@@ -28,9 +28,12 @@ MAX_MEDIA  = 10
 
 
 def _file_icon(ext: str) -> str:
-    if ext in IMAGE_EXTS: return "🖼"
-    if ext in VIDEO_EXTS: return "🎬"
-    if ext in AUDIO_EXTS: return "🎵"
+    if ext in IMAGE_EXTS:
+        return "🖼"
+    if ext in VIDEO_EXTS:
+        return "🎬"
+    if ext in AUDIO_EXTS:
+        return "🎵"
     return "📄"
 
 
@@ -529,16 +532,11 @@ class MessageEditorWidget(QWidget):
     # ── Public API ────────────────────────────────────────────────────────────
 
     def load_message(self, msg_id: int, title: str, text: str, media_path: str | None) -> None:
-        """Load a saved message template into the editor.
-
-        ``text`` is stored as native Qt HTML (from toHtml()), so we restore
-        it with setHtml() to perfectly reconstruct formatting and line breaks.
-        """
+        """Load a saved message template into the editor."""
         self.current_msg_id = msg_id
         self.lbl_hint.hide()
         self._editor.show()
         self.inp_title.setText(title)
-        # Use setHtml to restore rich text with correct newlines/formatting
         if text:
             self.inp_text.setHtml(telegram_html_to_display_html(text) if text else "")
         else:
@@ -593,8 +591,6 @@ class MessageEditorWidget(QWidget):
             QMessageBox.warning(self, t("app.warning"), t("messages.error_empty_title"))
             return
 
-        # Store native Qt HTML — preserves all formatting and line breaks.
-        # to_telegram_html() is called only at send time (in dashboard).
         text = self.inp_text.toHtml()
 
         self.save_requested.emit(

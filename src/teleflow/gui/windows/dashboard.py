@@ -3,7 +3,7 @@ import json as _json
 from datetime import datetime
 from typing import Any
 
-from PyQt6.QtCore import Qt, QPoint, QTimer
+from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QCursor, QColor
 from PyQt6.QtWidgets import (
     QDialog, QFrame, QHBoxLayout, QHeaderView, QLabel,
@@ -29,9 +29,7 @@ from teleflow.gui.windows.csv_import import CSVImportWizard
 from teleflow.gui.windows.csv_msg_import import CSVMessageImportWizard
 from teleflow.gui.windows.login import LoginWindow
 from teleflow.gui.windows.send_rules import SendRulesDialog
-from teleflow.gui.windows.schedule_wizard import ScheduleWizard
 from teleflow.i18n import t
-from teleflow.utils.logger import logger
 
 
 def _primary_btn(label: str) -> QPushButton:
@@ -64,7 +62,6 @@ class DashboardWindow(QMainWindow):
         self.message_manager   = MessageManager()
         self.sender_engine     = SenderEngine(self.message_manager)
         self.scheduler_manager = SchedulerManager(self.sender_engine)
-        # start() is async — deferred to first event loop tick
         import asyncio as _asyncio
         _asyncio.ensure_future(self.scheduler_manager.start())
 
@@ -270,7 +267,9 @@ class DashboardWindow(QMainWindow):
         self.btn_import_csv = _primary_btn("⬆ Импорт CSV")
         self.btn_import_csv.clicked.connect(self._on_import_csv)
 
-        hdr.addWidget(title); hdr.addStretch(); hdr.addWidget(self.btn_import_csv)
+        hdr.addWidget(title)
+        hdr.addStretch()
+        hdr.addWidget(self.btn_import_csv)
         ly.addLayout(hdr)
 
         sep = QFrame()
@@ -300,8 +299,10 @@ class DashboardWindow(QMainWindow):
         self.btn_new_msg = _primary_btn("＋ Новый шаблон")
         self.btn_new_msg.clicked.connect(self._on_new_message)
 
-        hdr.addWidget(title); hdr.addStretch()
-        hdr.addWidget(self.btn_import_msg); hdr.addWidget(self.btn_new_msg)
+        hdr.addWidget(title)
+        hdr.addStretch()
+        hdr.addWidget(self.btn_import_msg)
+        hdr.addWidget(self.btn_new_msg)
         ly.addLayout(hdr)
 
         sep = QFrame()
@@ -342,7 +343,9 @@ class DashboardWindow(QMainWindow):
             lambda: asyncio.ensure_future(self._on_refresh_logs())
         )
 
-        hdr.addWidget(title); hdr.addStretch(); hdr.addWidget(self.btn_refresh_logs)
+        hdr.addWidget(title)
+        hdr.addStretch()
+        hdr.addWidget(self.btn_refresh_logs)
         ly.addLayout(hdr)
 
         # ── Filter bar ──────────────────────────────────────────────────────
@@ -383,10 +386,10 @@ class DashboardWindow(QMainWindow):
             h.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
             h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
             h.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
-            
+
             # Set default widths for interactive columns
-            self.logs_table.setColumnWidth(2, 250) # Chat
-            self.logs_table.setColumnWidth(3, 200) # Message
+            self.logs_table.setColumnWidth(2, 250)  # Chat
+            self.logs_table.setColumnWidth(3, 200)  # Message
         self.logs_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.logs_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.logs_table.setAlternatingRowColors(True)
@@ -499,7 +502,6 @@ class DashboardWindow(QMainWindow):
 
     async def _on_save_settings(self) -> None:
         from teleflow.i18n import set_locale as _set_locale  # noqa: PLC0415
-        import asyncio as _aio  # noqa: PLC0415
 
         # Interface
         vals = self._settings_iface.get_values()

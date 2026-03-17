@@ -15,10 +15,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import (
     QDialog,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QSizePolicy,
     QSpacerItem,
@@ -28,8 +26,7 @@ from PyQt6.QtWidgets import (
 
 from teleflow.gui.styles import TG_BASE_COLORS, theme_manager
 from teleflow.i18n import t
-from teleflow.utils.logger import logger
-from teleflow.utils.password import hash_password, verify_password
+from teleflow.utils.password import verify_password
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
