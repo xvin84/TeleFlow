@@ -1,0 +1,46 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Virtual environments
+.venv
+.venv*/
+venv/
+
+# Database files — contain encrypted Telegram sessions, NEVER commit
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+teleflow.db
+teleflow_scheduler.db
+CONTRIBUTING.md
+
+# Environment & secrets
+.env
+.env.*
+*.key
+*.pem
+
+# Logs
+logs/
+*.log
+
+# PyInstaller output
+dist/
+*.spec
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# uv cache
+.uv_cache/

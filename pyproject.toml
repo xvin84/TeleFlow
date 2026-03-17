@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "teleflow"
+version = "0.1.0-alpha"
+description = "TeleFlow - Desktop application for automated Telegram messaging"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "GNU GPL v3"}
+
+dependencies = [
+    "PyQt6>=6.7",
+    "telethon>=1.36",
+    "apscheduler>=4.0.0a1",
+    "sniffio",
+    "aiosqlite",
+    "cryptography",
+    "bcrypt",
+    "pystray",
+    "loguru",
+    "plyer",
+    "PyYAML",
+    "qasync>=0.28.0",
+    "sqlalchemy[asyncio]>=2.0.48",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Allow pre-release versions (needed for apscheduler 4.x)
+[tool.uv]
+prerelease = "allow"
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+disable_error_code = ["untyped-decorator"]
+
+[[tool.mypy.overrides]]
+module = [
+    "telethon.*",
+    "qasync.*",
+    "bcrypt.*",
+    "plyer.*"
+]
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.6",
+]
