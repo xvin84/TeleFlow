@@ -129,7 +129,7 @@ def _autostart_get() -> bool:
         return (Path.home() / ".config" / "autostart" / "teleflow.desktop").exists()
     if sys.platform == "win32":
         try:
-            import winreg  # type: ignore[import]
+            import winreg  # type: ignore[import-untyped]
             k = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
                 r"Software\\Microsoft\\Windows\\CurrentVersion\\Run",
@@ -159,7 +159,7 @@ def _autostart_set(enabled: bool) -> None:
             f.unlink(missing_ok=True)
     elif sys.platform == "win32":
         try:
-            import winreg  # type: ignore[import]
+            import winreg  # type: ignore[import-untyped]
             k = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
                 r"Software\\Microsoft\\Windows\\CurrentVersion\\Run",
@@ -178,10 +178,10 @@ def _autostart_set(enabled: bool) -> None:
                     pass
             winreg.CloseKey(k)
         except Exception as e:
-            raise RuntimeError(f"Реестр: {e}") from e
+            raise RuntimeError(f"Registry error: {e}") from e
 
 
-# ── PasswordSection (no save button — handled by parent) ──────────────────────
+# ── PasswordSection ────────────────────────────────────────────────────────────
 
 class _PasswordSection(QWidget):
     def __init__(self, acct_mgr: AccountManager, parent: QWidget | None = None) -> None:
@@ -294,7 +294,6 @@ class _PasswordSection(QWidget):
         self.lbl_err.setText(m)
         self.lbl_err.show()
 
-    # Called by parent to collect values (no-op for password — it saves itself)
     def get_values(self) -> dict:  # type: ignore[type-arg]
         return {}
 
@@ -310,24 +309,24 @@ class _InterfaceSection(QWidget):
         ly = QVBoxLayout(self)
         ly.setContentsMargins(0, 0, 0, 0)
         ly.setSpacing(10)
-        ly.addWidget(_label("Интерфейс"))
+        ly.addWidget(_label(t("settings.section_interface")))
         ly.addWidget(_sep())
 
         row_t = QHBoxLayout()
-        row_t.addWidget(QLabel("🎨  Тема:"))
-        self.cb_theme = _combo(["🌙  Тёмная", "☀️  Светлая"])
+        row_t.addWidget(QLabel(t("settings.theme_label")))
+        self.cb_theme = _combo([t("settings.theme_dark_option"), t("settings.theme_light_option")])
         row_t.addWidget(self.cb_theme)
         row_t.addStretch()
         ly.addLayout(row_t)
 
         row_l = QHBoxLayout()
-        row_l.addWidget(QLabel("🌐  Язык:"))
-        self.cb_lang = _combo(["🇷🇺  Русский", "🇬🇧  English"])
+        row_l.addWidget(QLabel(t("settings.language_label")))
+        self.cb_lang = _combo([t("settings.lang_ru"), t("settings.lang_en")])
         row_l.addWidget(self.cb_lang)
         row_l.addStretch()
         ly.addLayout(row_l)
 
-        note = QLabel("Язык изменится после перезапуска приложения.")
+        note = QLabel(t("settings.lang_restart_note"))
         note.setStyleSheet(f"font-size:11px;color:{TG_BASE_COLORS['text_muted']};")
         ly.addWidget(note)
         asyncio.ensure_future(self._load())
@@ -356,13 +355,13 @@ class _NotificationsSection(QWidget):
         ly = QVBoxLayout(self)
         ly.setContentsMargins(0, 0, 0, 0)
         ly.setSpacing(8)
-        ly.addWidget(_label("Уведомления"))
+        ly.addWidget(_label(t("settings.section_notifications")))
         ly.addWidget(_sep())
 
-        self.cb_enabled    = _check("Включить системные уведомления")
-        self.cb_on_success = _check("При успешной отправке")
-        self.cb_on_error   = _check("При ошибке отправки")
-        self.cb_on_flood   = _check("При FloodWait (превышение лимита)")
+        self.cb_enabled    = _check(t("settings.notify_enable"))
+        self.cb_on_success = _check(t("settings.notify_on_success"))
+        self.cb_on_error   = _check(t("settings.notify_on_error"))
+        self.cb_on_flood   = _check(t("settings.notify_on_flood"))
         for cb in (self.cb_enabled, self.cb_on_success, self.cb_on_error, self.cb_on_flood):
             ly.addWidget(cb)
 
@@ -402,21 +401,21 @@ class _AutostartSection(QWidget):
         ly = QVBoxLayout(self)
         ly.setContentsMargins(0, 0, 0, 0)
         ly.setSpacing(8)
-        ly.addWidget(_label("Автозапуск"))
+        ly.addWidget(_label(t("settings.section_autostart")))
         ly.addWidget(_sep())
 
         if sys.platform not in ("linux", "win32") and not sys.platform.startswith("linux"):
-            ly.addWidget(QLabel("Не поддерживается на этой платформе."))
+            ly.addWidget(QLabel(t("settings.autostart_not_supported")))
             return
 
-        self.cb_auto = _check("Запускать TeleFlow при входе в систему")
+        self.cb_auto = _check(t("settings.autostart_enable"))
         self.cb_auto.setChecked(_autostart_get())
         ly.addWidget(self.cb_auto)
 
         note_text = (
             "Linux: ~/.config/autostart/teleflow.desktop"
             if sys.platform.startswith("linux")
-            else "Windows: реестр HKCU\\...\\Run"
+            else "Windows: HKCU\\...\\Run"
         )
         note = QLabel(note_text)
         note.setStyleSheet(f"font-size:11px;color:{c['text_muted']};")
@@ -475,12 +474,11 @@ class SettingsWindow(QDialog):
         scroll.setWidget(box)
         root.addWidget(scroll, stretch=1)
 
-        # Single bottom bar with one Save button
         bot = QHBoxLayout()
         bot.setContentsMargins(30, 12, 30, 20)
         bot.setSpacing(10)
-        btn_save  = _primary_btn("💾  Сохранить настройки")
-        btn_close = QPushButton("Закрыть")
+        btn_save  = _primary_btn(t("settings.btn_save_all"))
+        btn_close = QPushButton(t("settings.btn_close"))
         btn_close.setFixedHeight(38)
         btn_close.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_close.setStyleSheet(f"""
@@ -496,27 +494,20 @@ class SettingsWindow(QDialog):
         root.addLayout(bot)
 
     async def _save_all(self) -> None:
-        # Interface
         for k, v in self._iface.get_values().items():
             await db.set_setting(k, v)
         theme = self._iface.get_values().get("theme", "dark")
         theme_manager.set_theme(theme)
 
-        # Notifications
         for k, v in self._notif.get_values().items():
             await db.set_setting(k, v)
 
-        # Autostart
         auto_vals = self._auto.get_values()
         if "_autostart" in auto_vals:
             try:
                 _autostart_set(auto_vals["_autostart"])
             except Exception as e:
-                QMessageBox.warning(self, "Автозапуск", f"Ошибка: {e}")
+                QMessageBox.warning(self, t("settings.section_autostart"), t("settings.autostart_error", error=str(e)))
                 return
 
-        QMessageBox.information(
-            self,
-            t("app.title"),
-            "Настройки сохранены.\nЯзык и некоторые параметры вступят в силу после перезапуска.",
-        )
+        QMessageBox.information(self, t("app.title"), t("settings.saved_ok"))

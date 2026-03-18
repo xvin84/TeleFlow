@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import concurrent.futures
 from teleflow.utils.logger import logger
 
 _client_registry: dict[str, object] = {}
@@ -49,11 +50,11 @@ async def dispatch_scheduled_send(
     # Submit to main loop — fire and forget, do NOT block with fut.result()
     # The scheduler thread returns immediately; send runs when main loop is free.
     fut = asyncio.run_coroutine_threadsafe(
-        sender.send_message_now(client, phone, msg_id, text_content, media_path_raw),  # type: ignore
+        sender.send_message_now(client, phone, msg_id, text_content, media_path_raw),  # type: ignore[arg-type]
         _main_loop,
     )
 
-    def _on_done(f: asyncio.Future) -> None:  # type: ignore
+    def _on_done(f: concurrent.futures.Future[None]) -> None:
         exc = f.exception()
         if exc:
             logger.error(f"[dispatch] Scheduled send failed for msg {msg_id}: {exc}")

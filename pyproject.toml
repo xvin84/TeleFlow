@@ -46,7 +46,9 @@ module = [
     "telethon.*",
     "qasync.*",
     "bcrypt.*",
-    "plyer.*"
+    "plyer.*",
+    "pystray.*",
+    "PIL.*",
 ]
 ignore_missing_imports = true
 

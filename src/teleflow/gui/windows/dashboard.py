@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtGui import QCursor, QColor
+from PyQt6.QtGui import QCursor, QColor, QTextDocument
 from PyQt6.QtWidgets import (
     QDialog, QFrame, QHBoxLayout, QHeaderView, QLabel,
     QListWidget, QListWidgetItem, QMainWindow, QMenu,
@@ -92,28 +92,19 @@ class DashboardWindow(QMainWindow):
         """Re-apply all inline styles after a theme switch."""
         c = TG_BASE_COLORS
 
-        # Main window QSS (sidebar, nav buttons, account selector, etc.)
         self.setStyleSheet(theme_manager.dashboard_qss())
 
-        # Sidebar hint label
         self._hint_label.setStyleSheet(
             f"color: {c['text_muted']}; font-size: 11px; margin: 2px 15px 4px;"
         )
 
-        # Separator lines
         for sep in self._sep_frames:
             sep.setStyleSheet(f"color: {c['border']};")
 
-        # Message list
         self._refresh_msg_list_style()
-
-        # Logs table
         self._refresh_logs_table_style()
-
-        # Theme toggle button label
         self._update_theme_btn()
 
-        # Child compound widgets
         self.chat_list_widget.refresh_theme()
         self.msg_editor.refresh_theme()
 
@@ -195,8 +186,7 @@ class DashboardWindow(QMainWindow):
         self.cb_account.customContextMenuRequested.connect(self._on_account_context_menu)
         ly.addWidget(self.cb_account)
 
-        # Store ref for theme refresh
-        self._hint_label = QLabel("ПКМ → удалить аккаунт")
+        self._hint_label = QLabel(t("dashboard.hint_remove_account"))
         self._hint_label.setStyleSheet(
             f"color: {TG_BASE_COLORS['text_muted']}; font-size: 11px; margin: 2px 15px 4px;"
         )
@@ -222,7 +212,6 @@ class DashboardWindow(QMainWindow):
         ly.addLayout(nav_ly)
         ly.addStretch()
 
-        # Theme toggle button
         self.btn_theme = QPushButton()
         self.btn_theme.setProperty("class", "SidebarMenuBtn")
         self.btn_theme.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
@@ -264,7 +253,7 @@ class DashboardWindow(QMainWindow):
         title = QLabel(t("dashboard.chats"))
         title.setProperty("class", "WorkspaceHeader")
 
-        self.btn_import_csv = _primary_btn("⬆ Импорт CSV")
+        self.btn_import_csv = _primary_btn(t("dashboard.btn_import_csv"))
         self.btn_import_csv.clicked.connect(self._on_import_csv)
 
         hdr.addWidget(title)
@@ -293,10 +282,10 @@ class DashboardWindow(QMainWindow):
         title = QLabel(t("dashboard.messages"))
         title.setProperty("class", "WorkspaceHeader")
 
-        self.btn_import_msg = _primary_btn("⬆ Импорт CSV")
+        self.btn_import_msg = _primary_btn(t("dashboard.btn_import_csv"))
         self.btn_import_msg.clicked.connect(self._on_import_msg_csv)
 
-        self.btn_new_msg = _primary_btn("＋ Новый шаблон")
+        self.btn_new_msg = _primary_btn(t("dashboard.btn_new_template"))
         self.btn_new_msg.clicked.connect(self._on_new_message)
 
         hdr.addWidget(title)
@@ -338,7 +327,7 @@ class DashboardWindow(QMainWindow):
         title = QLabel(t("dashboard.logs"))
         title.setProperty("class", "WorkspaceHeader")
 
-        self.btn_refresh_logs = _primary_btn("🔄 Обновить")
+        self.btn_refresh_logs = _primary_btn(t("dashboard.btn_refresh"))
         self.btn_refresh_logs.clicked.connect(
             lambda: asyncio.ensure_future(self._on_refresh_logs())
         )
@@ -354,17 +343,22 @@ class DashboardWindow(QMainWindow):
         filter_bar.setSpacing(10)
 
         self.logs_search = QLineEdit()
-        self.logs_search.setPlaceholderText("🔍 Поиск по чату или шаблону...")
+        self.logs_search.setPlaceholderText(t("dashboard.logs_search"))
         self.logs_search.setFixedHeight(32)
         self.logs_search.textChanged.connect(self._apply_logs_filter)
 
         self.logs_status_filter = QComboBox()
         self.logs_status_filter.setFixedHeight(32)
         self.logs_status_filter.setFixedWidth(160)
-        self.logs_status_filter.addItems(["Все статусы", "✅ Успешно", "❌ Ошибка", "⏳ Rate limited"])
+        self.logs_status_filter.addItems([
+            t("dashboard.status_all"),
+            t("dashboard.status_success"),
+            t("dashboard.status_error"),
+            t("dashboard.status_rate_limited"),
+        ])
         self.logs_status_filter.currentIndexChanged.connect(self._apply_logs_filter)
 
-        btn_export = _primary_btn("📥 Экспорт CSV")
+        btn_export = _primary_btn(t("dashboard.btn_export_csv"))
         btn_export.setFixedHeight(32)
         btn_export.clicked.connect(self._on_export_logs)
 
@@ -376,7 +370,9 @@ class DashboardWindow(QMainWindow):
         self.logs_table = QTableWidget()
         self.logs_table.setColumnCount(6)
         self.logs_table.setHorizontalHeaderLabels(
-            ["Дата / Время", "Аккаунт", "Чат", "Сообщение", "Статус", "Ошибка"]
+            [t("dashboard.log_col_time"), t("dashboard.log_col_account"),
+             t("dashboard.log_col_chat"), t("dashboard.log_col_message"),
+             t("dashboard.log_col_status"), t("dashboard.log_col_error")]
         )
         h = self.logs_table.horizontalHeader()
         if h:
@@ -386,10 +382,8 @@ class DashboardWindow(QMainWindow):
             h.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
             h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
             h.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
-
-            # Set default widths for interactive columns
-            self.logs_table.setColumnWidth(2, 250)  # Chat
-            self.logs_table.setColumnWidth(3, 200)  # Message
+            self.logs_table.setColumnWidth(2, 250)
+            self.logs_table.setColumnWidth(3, 200)
         self.logs_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.logs_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.logs_table.setAlternatingRowColors(True)
@@ -398,15 +392,6 @@ class DashboardWindow(QMainWindow):
             vh.setVisible(False)
         self._refresh_logs_table_style()
         ly.addWidget(self.logs_table)
-        self.stack.addWidget(view)
-
-    def _build_placeholder_view(self, text: str) -> None:
-        view = QWidget()
-        ly = QVBoxLayout(view)
-        lbl = QLabel(text)
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet("font-size: 22px; color: #a2c9f4;")
-        ly.addWidget(lbl)
         self.stack.addWidget(view)
 
     def _build_settings_view(self) -> None:
@@ -460,12 +445,11 @@ class DashboardWindow(QMainWindow):
         scroll.setWidget(content)
         ly.addWidget(scroll, stretch=1)
 
-        # ── Single Save button bar ─────────────────────────────────────────
         from PyQt6.QtGui import QCursor as _QCursor  # noqa: PLC0415
         bot = QHBoxLayout()
         bot.setContentsMargins(30, 10, 30, 16)
         c = TG_BASE_COLORS
-        btn_save = QPushButton("💾  Сохранить настройки")
+        btn_save = QPushButton(t("settings.btn_save_all"))
         btn_save.setFixedHeight(40)
         btn_save.setCursor(_QCursor(Qt.CursorShape.PointingHandCursor))
         btn_save.setStyleSheet(f"""
@@ -476,7 +460,6 @@ class DashboardWindow(QMainWindow):
             QPushButton:hover {{ background: {c['accent_hover']}; }}
         """)
 
-        # Capture section refs for the save handler
         self._settings_iface = iface_section
         self._settings_notif = notif_section
         self._settings_auto  = auto_section
@@ -503,37 +486,28 @@ class DashboardWindow(QMainWindow):
     async def _on_save_settings(self) -> None:
         from teleflow.i18n import set_locale as _set_locale  # noqa: PLC0415
 
-        # Interface
         vals = self._settings_iface.get_values()
         for k, v in vals.items():
             await db.set_setting(k, v)
         theme_manager.set_theme(vals.get("theme", "dark"))
 
-        # Locale — apply immediately + save
         new_locale = vals.get("locale", "ru")
         _set_locale(new_locale)
         await db.set_setting("locale", new_locale)
 
-        # Notifications
         for k, v in self._settings_notif.get_values().items():
             await db.set_setting(k, v)
 
-        # Autostart
         auto_vals = self._settings_auto.get_values()
         if "_autostart" in auto_vals:
             from teleflow.gui.windows.settings import _autostart_set  # noqa: PLC0415
             try:
                 _autostart_set(auto_vals["_autostart"])
             except Exception as e:
-                QMessageBox.warning(self, "Автозапуск", f"Ошибка: {e}")
+                QMessageBox.warning(self, t("dashboard.settings"), t("settings.autostart_error", error=str(e)))
                 return
 
-        QMessageBox.information(
-            self, "Настройки",
-            "Настройки сохранены. "
-            "Язык применится сразу к новым элементам; "
-            "для полного обновления UI перезапустите приложение."
-        )
+        QMessageBox.information(self, t("dashboard.settings"), t("settings.saved_ok"))
 
     # ── Accounts ───────────────────────────────────────────────────────────────
 
@@ -569,10 +543,12 @@ class DashboardWindow(QMainWindow):
         if not phone:
             return
         menu = QMenu(self)
-        action = menu.addAction(f"🗑  Удалить аккаунт {phone}")
+        action = menu.addAction(t("dashboard.remove_account_menu", phone=phone))
         if menu.exec(self.cb_account.mapToGlobal(pos)) == action:
             reply = QMessageBox.question(
-                self, "Удалить аккаунт", f"Удалить аккаунт {phone}?",
+                self,
+                t("dashboard.remove_account_title"),
+                t("dashboard.remove_account_confirm", phone=phone),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.Yes:
@@ -606,14 +582,14 @@ class DashboardWindow(QMainWindow):
             return
         client = self.account_manager.active_clients.get(self.current_phone)
         if not client:
-            QMessageBox.warning(self, "Ошибка", "Аккаунт не подключён.")
+            QMessageBox.warning(self, t("app.warning"), t("dashboard.account_not_connected"))
             return
         self.chat_list_widget.btn_sync.setEnabled(False)
-        self.chat_list_widget.btn_sync.setText("Синхронизация…")
+        self.chat_list_widget.btn_sync.setText(t("dashboard.sync_in_progress"))
         if await self.chat_manager.sync_dialogs(client):
             await self._load_local_chats()
         else:
-            QMessageBox.warning(self, "Синхронизация", "Не удалось получить диалоги.")
+            QMessageBox.warning(self, t("dashboard.sync"), t("dashboard.sync_error"))
         self.chat_list_widget.btn_sync.setEnabled(True)
         self.chat_list_widget.btn_sync.setText("🔄 " + t("dashboard.sync"))
 
@@ -668,10 +644,10 @@ class DashboardWindow(QMainWindow):
             return
         if msg_id:
             await self.message_manager.update_message(msg_id, title, text, media_json)
-            QMessageBox.information(self, "Сохранено", "Шаблон обновлён.")
+            QMessageBox.information(self, t("dashboard.saved"), t("dashboard.template_updated"))
         else:
             await self.message_manager.create_message(self.current_phone, title, text, media_json)
-            QMessageBox.information(self, "Создано", "Новый шаблон создан.")
+            QMessageBox.information(self, t("dashboard.created"), t("dashboard.template_created"))
         await self._load_local_messages()
 
     @qasync.asyncSlot(int)
@@ -686,12 +662,18 @@ class DashboardWindow(QMainWindow):
             return
         client = self.account_manager.active_clients.get(self.current_phone)
         if not client:
-            QMessageBox.warning(self, "Ошибка", "Аккаунт не подключён.")
+            QMessageBox.warning(self, t("app.warning"), t("dashboard.account_not_connected"))
             return
+
+        # FIX: QTextEdit.document() can return None in PyQt6 stubs.
+        # In practice it always returns a valid document, so we assert.
+        doc: QTextDocument | None = self.msg_editor.inp_text.document()
+        assert doc is not None, "QTextEdit.document() returned None unexpectedly"
+
         dialog = SendRulesDialog(
             msg_id=msg_id,
-            msg_title=self.msg_editor.inp_title.text() or "Шаблон",
-            msg_document=self.msg_editor.inp_text.document(),
+            msg_title=self.msg_editor.inp_title.text() or t("messages.title_placeholder"),
+            msg_document=doc,
             media_paths=self.msg_editor.media_gallery.get_paths(),
             phone=self.current_phone,
             client=client,
@@ -708,26 +690,31 @@ class DashboardWindow(QMainWindow):
             return
         client = self.account_manager.active_clients.get(self.current_phone)
         if not client:
-            QMessageBox.warning(self, "Ошибка", "Аккаунт не подключён.")
+            QMessageBox.warning(self, t("app.warning"), t("dashboard.account_not_connected"))
             return
         self.msg_editor.btn_send_now.setEnabled(False)
-        self.msg_editor.btn_send_now.setText("⏳ Отправка...")
+        self.msg_editor.btn_send_now.setText(t("dashboard.sending"))
         try:
             assigned = await self.message_manager.get_assigned_chats_for_message(msg_id)
             if not [a for a in assigned if a.get("is_active")]:
-                QMessageBox.warning(self, "Нет чатов", "Назначьте чаты через «Назначить чаты».")
+                QMessageBox.warning(self, t("dashboard.error"), t("dashboard.no_chats_assigned"))
                 return
             paths = self.msg_editor.media_gallery.get_paths()
             media_raw = _json.dumps(paths) if paths else None
-            text = to_telegram_html(self.msg_editor.inp_text.document())
+
+            # FIX: document() can be None per stubs; assert for type safety
+            doc: QTextDocument | None = self.msg_editor.inp_text.document()
+            assert doc is not None
+            text = to_telegram_html(doc)
+
             await self.sender_engine.send_message_now(
                 client, self.current_phone, msg_id, text, media_raw)  # type: ignore[arg-type]
-            QMessageBox.information(self, "✅ Готово", "Сообщение отправлено!")
+            QMessageBox.information(self, t("dashboard.send_done"), t("dashboard.send_done_msg"))
         except Exception as e:
-            QMessageBox.warning(self, "Ошибка", str(e))
+            QMessageBox.warning(self, t("dashboard.error"), str(e))
         finally:
             self.msg_editor.btn_send_now.setEnabled(True)
-            self.msg_editor.btn_send_now.setText("⚡  Сейчас")
+            self.msg_editor.btn_send_now.setText(t("messages.btn_send_now_short"))
 
     def _on_import_msg_csv(self) -> None:
         if not self.current_phone:
@@ -765,11 +752,16 @@ class DashboardWindow(QMainWindow):
         import csv  # noqa: PLC0415
         from PyQt6.QtWidgets import QFileDialog  # noqa: PLC0415
         path, _ = QFileDialog.getSaveFileName(
-            self, "Экспорт логов", "teleflow_logs.csv", "CSV (*.csv)"
+            self, t("dashboard.logs_export_title"),
+            t("dashboard.export_logs_filename"), "CSV (*.csv)"
         )
         if not path:
             return
-        headers = ["Дата / Время", "Аккаунт", "Чат", "Сообщение", "Статус", "Ошибка"]
+        headers = [
+            t("dashboard.log_col_time"), t("dashboard.log_col_account"),
+            t("dashboard.log_col_chat"), t("dashboard.log_col_message"),
+            t("dashboard.log_col_status"), t("dashboard.log_col_error"),
+        ]
         try:
             with open(path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
@@ -782,9 +774,11 @@ class DashboardWindow(QMainWindow):
                         item = self.logs_table.item(row, col)
                         cells.append(item.text() if item else "")
                     writer.writerow(cells)
-            QMessageBox.information(self, "Экспорт", f"Логи сохранены в:\n{path}")
+            QMessageBox.information(self, t("dashboard.logs_export_title"),
+                                    t("dashboard.logs_exported", path=path))
         except Exception as e:
-            QMessageBox.warning(self, "Ошибка", f"Не удалось сохранить файл:\n{e}")
+            QMessageBox.warning(self, t("app.warning"),
+                                t("dashboard.logs_export_error", error=str(e)))
 
     async def _on_refresh_logs(self) -> None:
         if not self.current_phone:

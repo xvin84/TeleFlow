@@ -139,11 +139,11 @@ class _MediaGallery(QWidget):
         outer.setSpacing(8)
 
         header = QHBoxLayout()
-        lbl = QLabel("📎  Медиафайлы")
+        lbl = QLabel(t("messages.media_title"))
         lbl.setStyleSheet(
             f"font-size: 13px; font-weight: 600; color: {TG_BASE_COLORS['text_main']};"
         )
-        self.lbl_count = QLabel("0 / 10")
+        self.lbl_count = QLabel(f"0 / {MAX_MEDIA}")
         self.lbl_count.setStyleSheet(
             f"font-size: 12px; color: {TG_BASE_COLORS['text_muted']};"
         )
@@ -168,7 +168,7 @@ class _MediaGallery(QWidget):
         scroll.setWidget(self._inner)
         outer.addWidget(scroll)
 
-        self.btn_add = QPushButton("＋  Добавить файл")
+        self.btn_add = QPushButton(t("messages.btn_add_file"))
         self.btn_add.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self._apply_btn_add_style()
         self.btn_add.clicked.connect(self._on_add)
@@ -211,10 +211,13 @@ class _MediaGallery(QWidget):
         return list(self._paths)
 
     def _rebuild(self) -> None:
+        # FIX: properly check widget() before calling deleteLater()
         while self._row.count():
             item = self._row.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
+            if item is not None:
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
 
         for i, p in enumerate(self._paths):
             card = _MediaCard(p, i)
@@ -251,7 +254,7 @@ class _MediaGallery(QWidget):
             "Видео (*.mp4 *.mov *.avi *.mkv);;"
             "Документы (*.pdf *.doc *.docx *.xls *.xlsx)"
         )
-        paths, _ = QFileDialog.getOpenFileNames(self, "Выберите файлы", "", filter_str)
+        paths, _ = QFileDialog.getOpenFileNames(self, t("messages.select_media"), "", filter_str)
         added = 0
         for p in paths:
             if added >= remaining:
@@ -283,10 +286,7 @@ class MessageEditorWidget(QWidget):
         self._root_ly.setContentsMargins(24, 20, 24, 20)
         self._root_ly.setSpacing(14)
 
-        self.lbl_hint = QLabel(
-            "✏️  Выберите шаблон из списка слева\n"
-            "или нажмите «＋ Новый шаблон» для создания нового"
-        )
+        self.lbl_hint = QLabel(t("messages.hint_text"))
         self.lbl_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_hint.setWordWrap(True)
         self._apply_hint_style()
@@ -488,7 +488,7 @@ class MessageEditorWidget(QWidget):
         self.btn_code.clicked.connect(self._toggle_code)
 
         ly.addStretch()
-        self.lbl_char_count = QLabel("0 / 4096")
+        self.lbl_char_count = QLabel(f"0 / 4096")
         self.lbl_char_count.setStyleSheet(
             f"font-size: 11px; color: {TG_BASE_COLORS['text_muted']}; min-width: 64px;"
         )
@@ -501,22 +501,22 @@ class MessageEditorWidget(QWidget):
         ly = QHBoxLayout()
         ly.setSpacing(8)
 
-        self.btn_delete = QPushButton("🗑  Удалить")
+        self.btn_delete = QPushButton(t("messages.btn_delete_short"))
         self.btn_delete.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.btn_delete.clicked.connect(self._on_delete_clicked)
         self.btn_delete.hide()
 
-        self.btn_rules = QPushButton("⚙  Управление отправкой")
+        self.btn_rules = QPushButton(t("messages.btn_rules"))
         self.btn_rules.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.btn_rules.clicked.connect(self._on_rules_clicked)
         self.btn_rules.hide()
 
-        self.btn_send_now = QPushButton("⚡  Сейчас")
+        self.btn_send_now = QPushButton(t("messages.btn_send_now_short"))
         self.btn_send_now.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.btn_send_now.clicked.connect(self._on_send_now_clicked)
         self.btn_send_now.hide()
 
-        self.btn_save = QPushButton("💾  Сохранить")
+        self.btn_save = QPushButton(t("messages.btn_save_short"))
         self.btn_save.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.btn_save.clicked.connect(self._on_save_clicked)
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import threading
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from teleflow.utils.logger import logger
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 def _notify(title: str, message: str, timeout: int = 5) -> None:
     """Show a desktop notification. Silent fallback if plyer is unavailable."""
     try:
-        from plyer import notification  # type: ignore[import]
+        from plyer import notification
         notification.notify(title=title, message=message, app_name="TeleFlow", timeout=timeout)
     except Exception:
         logger.debug(f"[Notify] {title}: {message}")
@@ -68,6 +68,8 @@ class TrayManager:
     - Supported on Windows and Linux/X11.
     - Automatically disabled on Wayland (no XWayland) — app runs without tray.
     - The tray runs in its own daemon thread so it doesn't block the Qt loop.
+    - Call stop() before process exit (connect to QApplication.aboutToQuit) to
+      cleanly terminate pystray's internal threads and avoid hanging on exit.
 
     IMPORTANT: The event loop reference is captured at construction time
     (main thread) and reused in tray callbacks. Never call asyncio.get_event_loop()
@@ -78,7 +80,7 @@ class TrayManager:
     def __init__(self, app: "QApplication", window: "QMainWindow") -> None:
         self._app    = app
         self._window = window
-        self._icon: object | None = None  # pystray.Icon
+        self._icon: Any = None  # pystray.Icon — typed as Any; pystray has no stubs
         self._thread: threading.Thread | None = None
         self._available = False
         # Capture the main event loop NOW, while we're in the main Qt/qasync thread.
@@ -96,7 +98,7 @@ class TrayManager:
         try:
             self._start_tray()
             self._available = True
-            # Only override close when tray actually works
+            # Override close to hide instead of quit (only when tray works)
             self._window.closeEvent = self._make_close_event()  # type: ignore[method-assign]
         except Exception as e:
             logger.info(
@@ -104,20 +106,22 @@ class TrayManager:
                 "— running without tray. Install a GNOME tray extension to enable it."
             )
             self._available = False
-            if self._icon:
+            if self._icon is not None:
                 try:
-                    self._icon.stop()  # type: ignore[union-attr]
+                    self._icon.stop()
                 except Exception:
                     pass
                 self._icon = None
 
     def stop(self) -> None:
-        if self._icon:
+        """Stop the tray icon and release its threads. Call before process exit."""
+        if self._icon is not None:
             try:
-                self._icon.stop()  # type: ignore[union-attr]
+                self._icon.stop()
             except Exception:
                 pass
         self._icon = None
+        self._available = False
 
     @property
     def available(self) -> bool:
@@ -129,7 +133,7 @@ class TrayManager:
         """Return True if pystray is importable and session likely supports it."""
         import os  # noqa: PLC0415
         try:
-            import pystray  # type: ignore[import]  # noqa: F401
+            import pystray  # noqa: F401
         except ImportError:
             logger.info("TrayManager: pystray not installed — tray disabled.")
             return False
@@ -154,16 +158,16 @@ class TrayManager:
 
         return True
 
-    def _build_icon_image(self) -> object:
+    def _build_icon_image(self) -> Any:
         """Build a simple PIL image for the tray icon."""
-        from PIL import Image, ImageDraw  # type: ignore[import]
+        from PIL import Image, ImageDraw
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         draw.ellipse([4, 4, 60, 60], fill=(41, 182, 246, 255))
         draw.polygon([(20, 40), (44, 24), (44, 44)], fill=(255, 255, 255, 255))
         return img
 
-    def _build_menu(self) -> object:
+    def _build_menu(self) -> Any:
         """
         Build the tray menu.
 
@@ -171,21 +175,18 @@ class TrayManager:
         All callbacks will run in the pystray thread — use call_soon_threadsafe
         to schedule work on the Qt/qasync event loop safely.
         """
-        import pystray  # type: ignore[import]
+        import pystray
 
-        # Use the loop captured in __init__ (main thread). Never call
-        # asyncio.get_event_loop() from inside these callbacks — the pystray
-        # thread has no event loop and that call would raise RuntimeError.
         loop = self._loop
 
-        def _show(_icon: object, _item: object) -> None:
+        def _show(_icon: Any, _item: Any) -> None:
             if loop and loop.is_running():
                 loop.call_soon_threadsafe(self._show_window)
 
-        def _pause_all(_icon: object, _item: object) -> None:
+        def _pause_all(_icon: Any, _item: Any) -> None:
             logger.info("TrayManager: pause-all requested via tray")
 
-        def _quit(_icon: object, _item: object) -> None:
+        def _quit(_icon: Any, _item: Any) -> None:
             self.stop()
             if loop and loop.is_running():
                 loop.call_soon_threadsafe(self._app.quit)
@@ -198,8 +199,8 @@ class TrayManager:
         )
 
     def _start_tray(self) -> None:
-        import pystray  # type: ignore[import]
-        import time     # noqa: PLC0415
+        import pystray
+        import time
 
         image = self._build_icon_image()
         menu  = self._build_menu()
@@ -207,15 +208,15 @@ class TrayManager:
 
         _error: list[Exception] = []
 
-        original_run = self._icon.run_detached
+        original_run_detached = self._icon.run_detached
 
         def _patched_run() -> None:
             try:
-                original_run()
+                original_run_detached()
             except Exception as e:
                 _error.append(e)
 
-        self._icon.run_detached = _patched_run  # type: ignore[method-assign]
+        self._icon.run_detached = _patched_run
         self._icon.run_detached()
 
         # Give the tray thread a moment to fail if it's going to
@@ -235,15 +236,15 @@ class TrayManager:
         self._window.raise_()
         self._window.activateWindow()
 
-    def _make_close_event(self) -> Callable:  # type: ignore[type-arg]
+    def _make_close_event(self) -> Callable[..., None]:
         from PyQt6.QtGui import QCloseEvent
 
         def _close(event: QCloseEvent) -> None:
             event.ignore()
             self._window.hide()
-            if self._icon:
+            if self._icon is not None:
                 try:
-                    self._icon.notify("TeleFlow работает в фоне")  # type: ignore[union-attr]
+                    self._icon.notify("TeleFlow работает в фоне")
                 except Exception:
                     pass
 

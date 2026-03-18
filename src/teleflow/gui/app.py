@@ -79,6 +79,12 @@ class TeleFlowApp:
         tray = TrayManager(self.app, self.dashboard)
         tray.start()
 
+        # ── Critical: stop pystray threads before Python exits.
+        # pystray's X11 backend creates non-daemon threads that block
+        # Python's shutdown sequence. Connecting to aboutToQuit ensures
+        # they're stopped cleanly, allowing single Ctrl+C to work.
+        self.app.aboutToQuit.connect(tray.stop)
+
     async def _ensure_app_salt(self) -> bytes:
         salt_hex = await db.get_setting("app_salt")
         if salt_hex:

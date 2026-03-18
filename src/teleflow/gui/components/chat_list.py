@@ -49,10 +49,10 @@ class ChatListWidget(QWidget):
         filters_layout = QHBoxLayout()
         filters_layout.setSpacing(4)
 
-        self.btn_filter_all      = QPushButton("Все")
-        self.btn_filter_users    = QPushButton("👤 Личные")
-        self.btn_filter_groups   = QPushButton("👥 Группы")
-        self.btn_filter_channels = QPushButton("📢 Каналы")
+        self.btn_filter_all      = QPushButton(t("dashboard.filter_all"))
+        self.btn_filter_users    = QPushButton(t("dashboard.filter_personal"))
+        self.btn_filter_groups   = QPushButton(t("dashboard.filter_groups"))
+        self.btn_filter_channels = QPushButton(t("dashboard.filter_channels"))
 
         self.filter_group = QButtonGroup(self)
         self.filter_group.setExclusive(True)
@@ -136,12 +136,14 @@ class ChatListWidget(QWidget):
         text = self.inp_search.text().lower()
         checked = self.filter_group.checkedButton()
 
+        # FIX: checked is QAbstractButton | None; dict key is QPushButton.
+        # Use isinstance guard so mypy is satisfied.
         type_map: dict[QPushButton, str] = {
             self.btn_filter_users:    "User",
             self.btn_filter_groups:   "Group",
             self.btn_filter_channels: "Channel",
         }
-        active_type = type_map.get(checked)  # None means "All"
+        active_type = type_map.get(checked) if isinstance(checked, QPushButton) else None
 
         visible = 0
         for i in range(self.list_widget.count()):
@@ -157,7 +159,7 @@ class ChatListWidget(QWidget):
                 visible += 1
 
         total = self.list_widget.count()
-        self.lbl_count.setText(f"Показано: {visible} из {total}")
+        self.lbl_count.setText(t("dashboard.showing_count", visible=visible, total=total))
 
     # ------------------------------------------------------------------
     def _on_selection_changed(self) -> None:
