@@ -2,8 +2,12 @@ name: Lint, Type Check & Tests
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
 
 jobs:
   lint:
