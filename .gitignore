@@ -32,7 +32,6 @@ logs/
 
 # PyInstaller output
 dist/
-*.spec
 
 # IDE
 .idea/

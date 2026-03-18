@@ -1,84 +1,94 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-TeleFlow PyInstaller spec.
+PyInstaller spec for TeleFlow.
 
-Build (from project root):
-  uv run pyinstaller teleflow.spec --clean
-
-Or via GitHub Actions on tag push (see .github/workflows/build.yml).
+Generate a fresh spec (don't run in CI — use this committed file):
+    uv run pyinstaller --name TeleFlow --onefile \
+        --add-data "src/teleflow/i18n/locales:teleflow/i18n/locales" \
+        src/teleflow/__main__.py
 """
 
 import sys
 from pathlib import Path
 
-ROOT = Path(SPECPATH)
-SRC  = ROOT / "src" / "teleflow"
-
-block_cipher = None
+ROOT = Path(SPECPATH)  # noqa: F821  (SPECPATH injected by PyInstaller)
 
 a = Analysis(
     [str(ROOT / "src" / "teleflow" / "__main__.py")],
     pathex=[str(ROOT / "src")],
     binaries=[],
     datas=[
-        # Locale files
-        (str(SRC / "i18n" / "locales"), "teleflow/i18n/locales"),
+        # Locale JSON files must be bundled
+        (str(ROOT / "src" / "teleflow" / "i18n" / "locales"), "teleflow/i18n/locales"),
     ],
     hiddenimports=[
-        # Telethon crypto backends
-        "telethon.crypto",
-        "telethon.crypto.authkey",
-        # APScheduler triggers
+        # qasync hooks are sometimes missed
+        "qasync",
+        # APScheduler 4.x uses anyio; make sure executors are included
+        "anyio",
+        "anyio._backends._asyncio",
+        "apscheduler",
+        "apscheduler.schedulers.async_",
         "apscheduler.triggers.cron",
-        "apscheduler.triggers.date",
         "apscheduler.triggers.interval",
-        "apscheduler.datastores.sqlalchemy",
-        # SQLAlchemy async
-        "sqlalchemy.dialects.sqlite",
-        "aiosqlite",
-        # PyQt6 platform plugins
-        "PyQt6.QtWidgets",
-        "PyQt6.QtCore",
-        "PyQt6.QtGui",
-        # Optional: plyer and pystray
-        "plyer",
-        "plyer.platforms",
-        "pystray",
+        "apscheduler.triggers.date",
+        # Telethon crypto backends
+        "cryptography",
+        "cryptography.hazmat.primitives.asymmetric.rsa",
+        # pystray backends (Windows uses win32, Linux uses xorg)
+        "pystray._win32",
+        "pystray._xorg",
+        "pystray._darwin",
+        # PIL used by pystray icon
         "PIL",
         "PIL.Image",
         "PIL.ImageDraw",
+        # plyer notification backends
+        "plyer.platforms.win.notification",
+        "plyer.platforms.linux.notification",
+        # aiosqlite / sqlalchemy async
+        "aiosqlite",
+        "sqlalchemy.dialects.sqlite",
+        "sqlalchemy.ext.asyncio",
+        # bcrypt
+        "bcrypt",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "matplotlib", "numpy", "scipy"],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
+    excludes=[
+        # Don't bundle test frameworks
+        "pytest",
+        "mypy",
+        "ruff",
+        # Avoid pulling in tkinter
+        "tkinter",
+        "_tkinter",
+    ],
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)  # noqa: F821
 
-exe = EXE(
+exe = EXE(  # noqa: F821
     pyz,
     a.scripts,
     a.binaries,
-    a.zipfiles,
     a.datas,
     [],
     name="TeleFlow",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,          # UPX disabled: known issues on Linux
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,       # No console window on Windows
+    console=False,      # GUI app — no console window on Windows
     disable_windowed_traceback=False,
+    argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # Windows icon (add teleflow.ico to project root if you have one)
-    # icon="teleflow.ico",
+    # Windows: embed an icon if present
+    icon="assets/icon.ico" if (ROOT / "assets" / "icon.ico").exists() else None,
 )

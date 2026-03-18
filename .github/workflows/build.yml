@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false   # don't cancel other platforms if one fails
       matrix:
         include:
           - os: ubuntu-22.04
@@ -37,7 +38,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      # Linux: need display for PyQt6 even in headless build
       - name: Install Linux system deps
         if: runner.os == 'Linux'
         run: |
