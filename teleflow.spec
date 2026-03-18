@@ -2,66 +2,80 @@
 """
 PyInstaller spec for TeleFlow.
 
-Generate a fresh spec (don't run in CI — use this committed file):
+Regenerate from scratch (only if you need to reset):
     uv run pyinstaller --name TeleFlow --onefile \
         --add-data "src/teleflow/i18n/locales:teleflow/i18n/locales" \
         src/teleflow/__main__.py
 """
 
-import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_all, collect_submodules  # noqa: F821
 
-ROOT = Path(SPECPATH)  # noqa: F821  (SPECPATH injected by PyInstaller)
+ROOT = Path(SPECPATH)  # noqa: F821  (SPECPATH is injected by PyInstaller)
+
+# ── collect_all: grabs binaries + datas + hiddenimports for dynamic packages ──
+# These packages use runtime imports that static analysis misses.
+
+_qasync       = collect_all("qasync")
+_anyio        = collect_all("anyio")
+_apscheduler  = collect_all("apscheduler")
+_telethon     = collect_all("telethon")
+_plyer        = collect_all("plyer")
+_pystray      = collect_all("pystray")
+_sqlalchemy   = collect_all("sqlalchemy")
+
+def _merge(*collected):
+    datas, binaries, hiddenimports = [], [], []
+    for d, b, h in collected:
+        datas      += d
+        binaries   += b
+        hiddenimports += h
+    return datas, binaries, hiddenimports
+
+extra_datas, extra_binaries, extra_hidden = _merge(
+    _qasync, _anyio, _apscheduler, _telethon,
+    _plyer, _pystray, _sqlalchemy,
+)
 
 a = Analysis(
     [str(ROOT / "src" / "teleflow" / "__main__.py")],
     pathex=[str(ROOT / "src")],
-    binaries=[],
+    binaries=extra_binaries,
     datas=[
-        # Locale JSON files must be bundled
+        # Locale JSON files
         (str(ROOT / "src" / "teleflow" / "i18n" / "locales"), "teleflow/i18n/locales"),
+        *extra_datas,
     ],
     hiddenimports=[
-        # qasync hooks are sometimes missed
-        "qasync",
-        # APScheduler 4.x uses anyio; make sure executors are included
-        "anyio",
+        *extra_hidden,
+        # anyio backends
         "anyio._backends._asyncio",
-        "apscheduler",
-        "apscheduler.schedulers.async_",
-        "apscheduler.triggers.cron",
-        "apscheduler.triggers.interval",
-        "apscheduler.triggers.date",
-        # Telethon crypto backends
+        "anyio._backends._trio",
+        # cryptography
         "cryptography",
         "cryptography.hazmat.primitives.asymmetric.rsa",
-        # pystray backends (Windows uses win32, Linux uses xorg)
-        "pystray._win32",
-        "pystray._xorg",
-        "pystray._darwin",
-        # PIL used by pystray icon
+        "cryptography.hazmat.bindings._rust",
+        # PIL
         "PIL",
         "PIL.Image",
         "PIL.ImageDraw",
-        # plyer notification backends
-        "plyer.platforms.win.notification",
-        "plyer.platforms.linux.notification",
-        # aiosqlite / sqlalchemy async
+        # aiosqlite
         "aiosqlite",
-        "sqlalchemy.dialects.sqlite",
-        "sqlalchemy.ext.asyncio",
         # bcrypt
         "bcrypt",
+        # sqlalchemy dialects
+        "sqlalchemy.dialects.sqlite",
+        "sqlalchemy.ext.asyncio",
+        # sniffio (anyio dependency)
+        "sniffio",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Don't bundle test frameworks
         "pytest",
         "mypy",
         "ruff",
-        # Avoid pulling in tkinter
         "tkinter",
         "_tkinter",
     ],
@@ -83,12 +97,11 @@ exe = EXE(  # noqa: F821
     upx=False,          # UPX disabled: known issues on Linux
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,      # GUI app — no console window on Windows
+    console=False,      # no terminal window on Windows/Linux
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # Windows: embed an icon if present
     icon="assets/icon.ico" if (ROOT / "assets" / "icon.ico").exists() else None,
 )
