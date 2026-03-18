@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     strategy:
-      fail-fast: false   # don't cancel other platforms if one fails
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
@@ -32,10 +32,10 @@ jobs:
         with:
           version: "latest"
 
-      - name: Install Python
+      - name: Install Python 3.12
         run: uv python install 3.12
 
-      - name: Install dependencies
+      - name: Install project dependencies
         run: uv sync --frozen
 
       - name: Install Linux system deps
@@ -47,11 +47,17 @@ jobs:
             libxkbcommon-x11-0 libxcb-shape0 libxcb-render-util0 \
             libxcb-randr0 libxcb-xinerama0 libxcb-xfixes0
 
-      - name: Install PyInstaller
-        run: uv run pip install pyinstaller>=6.0 pillow
+      # uv pip install (NOT uv run pip install) writes directly into the
+      # project venv. uv run python -m PyInstaller then uses that same
+      # venv — guaranteed Python 3.12, all project packages visible.
+      - name: Install PyInstaller & Pillow
+        run: uv pip install "pyinstaller>=6.0" pillow
+
+      - name: Verify Python version
+        run: uv run python -c "import sys; print('Python:', sys.version)"
 
       - name: Build binary
-        run: uv run pyinstaller teleflow.spec --clean --noconfirm
+        run: uv run python -m PyInstaller teleflow.spec --clean --noconfirm
 
       - name: Rename artifact (Linux)
         if: runner.os == 'Linux'
