@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 
 from teleflow.core.storage.db import db
 from teleflow.gui.styles import TG_BASE_COLORS, theme_manager
+from teleflow.i18n import t
 from teleflow.utils.logger import logger
 from teleflow.utils.qt_helpers import to_telegram_html
 
@@ -74,7 +75,7 @@ class _ScheduleRow(QFrame):
         self._mode       = mode
         self._setup_ui(description)
         self._apply_style()
-        theme_manager.theme_changed.connect(lambda _: self._apply_style())
+        theme_manager.theme_changed.connect(self._on_theme_changed)
 
     def _setup_ui(self, description: str) -> None:
         ly = QHBoxLayout(self)
@@ -96,7 +97,11 @@ class _ScheduleRow(QFrame):
         )
         info.addWidget(lbl)
 
-        status_text = "На паузе" if self._is_paused else ("Выполнено" if self._mode == "one_time" else "Активно")
+        status_text = (
+            t("schedule.paused") if self._is_paused
+            else (t("schedule.status_done") if self._mode == "one_time"
+                  else t("schedule.status_active"))
+        )
         status_color = TG_BASE_COLORS["text_muted"] if self._is_paused else (
             TG_BASE_COLORS["text_muted"] if self._mode == "one_time" else TG_BASE_COLORS.get("green", "#4CAF50")
         )
@@ -159,6 +164,9 @@ class _ScheduleRow(QFrame):
             }}
         """)
 
+    def _on_theme_changed(self, _: str = "") -> None:
+        self._apply_style()
+
 
 # ── Chat row widget ────────────────────────────────────────────────────────────
 
@@ -177,7 +185,7 @@ class _ChatRow(QFrame):
         self.chat_db_id = chat_id
         self._setup_ui(title, chat_type)
         self._apply_style()
-        theme_manager.theme_changed.connect(lambda _: self._apply_style())
+        theme_manager.theme_changed.connect(self._on_theme_changed)
 
     def _setup_ui(self, title: str, chat_type: str) -> None:
         ly = QHBoxLayout(self)
@@ -232,6 +240,9 @@ class _ChatRow(QFrame):
                 border-radius: 8px;
             }}
         """)
+
+    def _on_theme_changed(self, _: str = "") -> None:
+        self._apply_style()
 
 
 # ── SendRulesDialog ────────────────────────────────────────────────────────────
@@ -394,11 +405,11 @@ class SendRulesDialog(QDialog):
         scroll.setWidget(self._chats_container)
         ly.addWidget(scroll, stretch=1)
 
-        self.lbl_no_chats = QLabel("Чаты не назначены.\nНачните вводить название чата выше.")
+        self.lbl_no_chats = QLabel("\ud83d\udcac  " + t("send_rules.no_chats_assigned"))
         self.lbl_no_chats.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_no_chats.setWordWrap(True)
         self.lbl_no_chats.setStyleSheet(
-            f"font-size: 12px; color: {TG_BASE_COLORS['text_muted']}; padding: 16px;"
+            f"font-size: 13px; color: {TG_BASE_COLORS['text_muted']}; padding: 20px;"
         )
         ly.addWidget(self.lbl_no_chats)
 
@@ -447,12 +458,12 @@ class SendRulesDialog(QDialog):
         ly.addWidget(scroll, stretch=1)
 
         self.lbl_no_scheds = QLabel(
-            "Нет активных расписаний.\nНажмите «＋ Добавить расписание» чтобы создать."
+            "\ud83d\udcc5  " + t("schedule.no_schedules_hint")
         )
         self.lbl_no_scheds.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_no_scheds.setWordWrap(True)
         self.lbl_no_scheds.setStyleSheet(
-            f"font-size: 12px; color: {TG_BASE_COLORS['text_muted']}; padding: 16px;"
+            f"font-size: 13px; color: {TG_BASE_COLORS['text_muted']}; padding: 20px;"
         )
         ly.addWidget(self.lbl_no_scheds)
 
@@ -576,7 +587,26 @@ class SendRulesDialog(QDialog):
 
         n = len(rows)
         self.lbl_chats_count.setText(str(n))
+        # Color badge green when chats assigned, red-ish when none
+        c = TG_BASE_COLORS
+        if n == 0:
+            badge_bg  = c["danger_light"]
+            badge_fg  = c["danger"]
+        else:
+            badge_bg  = c["green_light"]
+            badge_fg  = c["green"]
+        self.lbl_chats_count.setStyleSheet(
+            f"font-size: 12px; color: {badge_fg};"
+            f" background: {badge_bg};"
+            " border-radius: 10px; padding: 2px 8px;"
+        )
         self.lbl_no_chats.setVisible(n == 0)
+        # Disable send-now button when there are no chats
+        self.btn_send_now.setEnabled(n > 0)
+        if n == 0:
+            self.btn_send_now.setToolTip(t("send_rules.no_chats_title") + ": " + t("send_rules.no_chats_msg"))
+        else:
+            self.btn_send_now.setToolTip("")
 
         # Insert before the stretch at the end
         stretch_item = self._chats_ly.takeAt(self._chats_ly.count() - 1)

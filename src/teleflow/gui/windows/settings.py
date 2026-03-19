@@ -38,16 +38,44 @@ def _label(text: str) -> QLabel:
     c = TG_BASE_COLORS
     lbl = QLabel(text)
     lbl.setStyleSheet(
-        f"font-size: 11px; font-weight: 700; color: {c['text_muted']};"
-        " letter-spacing: 0.5px;"
+        f"font-size: 13px; font-weight: 700; color: {c['text_main']};"
+        " letter-spacing: 0.3px;"
     )
     return lbl
+
+
+def _card(widget: QWidget) -> QFrame:
+    """Wrap *widget* in a themed card frame."""
+    c = TG_BASE_COLORS
+    card = QFrame()
+    card.setStyleSheet(f"""
+        QFrame {{
+            background: {c['bg_sidebar']};
+            border: 1.5px solid {c['border']};
+            border-radius: 12px;
+        }}
+        QFrame QWidget {{
+            background: transparent;
+        }}
+        QFrame QLabel {{
+            background: transparent;
+        }}
+        QFrame QCheckBox {{
+            background: transparent;
+        }}
+    """)
+    ly = QVBoxLayout(card)
+    ly.setContentsMargins(18, 14, 18, 14)
+    ly.setSpacing(10)
+    ly.addWidget(widget)
+    return card
 
 
 def _sep() -> QFrame:
     f = QFrame()
     f.setFrameShape(QFrame.Shape.HLine)
-    f.setStyleSheet(f"color: {TG_BASE_COLORS['border']};")
+    f.setStyleSheet(f"color: {TG_BASE_COLORS['border']}; background: {TG_BASE_COLORS['border']};")
+    f.setFixedHeight(1)
     return f
 
 
@@ -466,7 +494,7 @@ class SettingsWindow(QDialog):
         self._notif = _NotificationsSection()
         self._auto  = _AutostartSection()
         for w in (self._pwd, self._iface, self._notif, self._auto):
-            ly.addWidget(w)
+            ly.addWidget(_card(w))
         ly.addSpacerItem(
             QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         )
@@ -492,7 +520,6 @@ class SettingsWindow(QDialog):
         bot.addWidget(btn_save)
         bot.addWidget(btn_close)
         root.addLayout(bot)
-
     async def _save_all(self) -> None:
         for k, v in self._iface.get_values().items():
             await db.set_setting(k, v)

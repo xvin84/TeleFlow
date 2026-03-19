@@ -168,7 +168,8 @@
     "account_not_connected": "Аккаунт не подключён.",
     "remove_account_menu": "🗑  Удалить аккаунт {phone}",
     "remove_account_title": "Удалить аккаунт",
-    "remove_account_confirm": "Удалить аккаунт {phone}?"
+    "remove_account_confirm": "Удалить аккаунт {phone}?",
+    "quit": "Выйти"
   },
   "messages": {
     "title_placeholder": "Название шаблона (напр. Приветствие)",

@@ -168,7 +168,8 @@
     "account_not_connected": "Account not connected.",
     "remove_account_menu": "🗑  Remove account {phone}",
     "remove_account_title": "Remove Account",
-    "remove_account_confirm": "Remove account {phone}?"
+    "remove_account_confirm": "Remove account {phone}?",
+    "quit": "Quit"
   },
   "messages": {
     "title_placeholder": "Template name (e.g. Welcome)",

@@ -82,6 +82,8 @@ class DashboardWindow(QMainWindow):
         theme_manager.theme_changed.connect(self._apply_theme)
 
     def closeEvent(self, event: Any) -> None:
+        # hideEvent — tray_manager intercepts close and hides. We only reach
+        # this if tray_manager is NOT installed (shouldn't happen after Fix 1).
         import asyncio as _asyncio
         _asyncio.ensure_future(self.scheduler_manager.shutdown())
         event.accept()
@@ -224,6 +226,29 @@ class DashboardWindow(QMainWindow):
         self.btn_add_acc.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.btn_add_acc.clicked.connect(lambda: self.open_add_account(cancellable=True))
         ly.addWidget(self.btn_add_acc)
+
+        btn_quit = QPushButton("⏻  " + t("dashboard.quit"))
+        btn_quit.setProperty("class", "SidebarMenuBtn")
+        btn_quit.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        c = TG_BASE_COLORS
+        btn_quit.setStyleSheet(f"""
+            QPushButton[class="SidebarMenuBtn"] {{
+                background-color: transparent;
+                text-align: left;
+                padding: 11px 20px;
+                font-size: 15px;
+                font-weight: 500;
+                border: none;
+                border-radius: 8px;
+                color: {c['danger']};
+                margin: 0px 10px 4px;
+            }}
+            QPushButton[class="SidebarMenuBtn"]:hover {{
+                background-color: {c['danger_light']};
+            }}
+        """)
+        btn_quit.clicked.connect(self._on_quit)
+        ly.addWidget(btn_quit)
         return w
 
     def _make_workspace(self) -> QWidget:
@@ -399,7 +424,7 @@ class DashboardWindow(QMainWindow):
         from PyQt6.QtWidgets import QScrollArea, QSizePolicy, QSpacerItem  # noqa: PLC0415
         from teleflow.gui.windows.settings import (  # noqa: PLC0415
             _PasswordSection, _InterfaceSection,
-            _NotificationsSection, _AutostartSection,
+            _NotificationsSection, _AutostartSection, _card,
         )
 
         view = QWidget()
@@ -428,16 +453,15 @@ class DashboardWindow(QMainWindow):
         content = QWidget()
         content.setStyleSheet("background: transparent;")
         content_ly = QVBoxLayout(content)
-        content_ly.setContentsMargins(30, 20, 30, 20)
-        content_ly.setSpacing(20)
+        content_ly.setContentsMargins(24, 20, 24, 20)
+        content_ly.setSpacing(14)
 
-        content_ly.addWidget(_PasswordSection(self.account_manager))
         iface_section = _InterfaceSection()
         notif_section = _NotificationsSection()
         auto_section  = _AutostartSection()
-        content_ly.addWidget(iface_section)
-        content_ly.addWidget(notif_section)
-        content_ly.addWidget(auto_section)
+        for section in (_PasswordSection(self.account_manager), iface_section,
+                        notif_section, auto_section):
+            content_ly.addWidget(_card(section))
         content_ly.addSpacerItem(
             QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         )
@@ -447,7 +471,7 @@ class DashboardWindow(QMainWindow):
 
         from PyQt6.QtGui import QCursor as _QCursor  # noqa: PLC0415
         bot = QHBoxLayout()
-        bot.setContentsMargins(30, 10, 30, 16)
+        bot.setContentsMargins(24, 10, 24, 16)
         c = TG_BASE_COLORS
         btn_save = QPushButton(t("settings.btn_save_all"))
         btn_save.setFixedHeight(40)
@@ -469,6 +493,7 @@ class DashboardWindow(QMainWindow):
         ly.addLayout(bot)
         self.stack.addWidget(view)
 
+
     # ── Navigation ─────────────────────────────────────────────────────────────
 
     def _on_nav_clicked(self, index: int) -> None:
@@ -482,6 +507,13 @@ class DashboardWindow(QMainWindow):
     async def _on_toggle_theme(self) -> None:
         theme_manager.toggle()
         await theme_manager.save_to_db()
+
+    def _on_quit(self) -> None:
+        """Quit the application gracefully via the sidebar button."""
+        import asyncio as _asyncio
+        _asyncio.ensure_future(self.scheduler_manager.shutdown())
+        from PyQt6.QtWidgets import QApplication
+        QApplication.instance().quit()  # type: ignore[union-attr]
 
     async def _on_save_settings(self) -> None:
         from teleflow.i18n import set_locale as _set_locale  # noqa: PLC0415

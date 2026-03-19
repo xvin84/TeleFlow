@@ -1,34 +1,49 @@
 """
 TrayManager — системный трей и системные уведомления.
 
-Системный трей: pystray (Win/Linux X11).
-Wayland fallback: pystray не работает на Wayland без XWayland —
-  определяем это и тихо отключаем трей (иконка в taskbar остаётся).
+Системный трей: PyQt6.QtWidgets.QSystemTrayIcon (Win/Linux/Mac).
+Не требует pystray, PIL или отдельного треда.
+Работает на GNOME X11/Wayland с libappindicator (если установлена),
+а также на KDE Plasma, XFCE, и всех окружениях с нормальным трей-сокетом.
 
-Уведомления: plyer.notification для Win/Linux desktop notifications.
-Fallback: если plyer недоступен — только лог.
+Если трей недоступен (нет иконки в области уведомлений) —
+приложение всё равно скрывается при нажатии X,
+а кнопка «Выйти» в sidebar обеспечивает явный выход.
+
+Уведомления: QSystemTrayIcon.showMessage() (встроено в Qt).
+Fallback: если showMessage недоступна — только лог.
 """
 from __future__ import annotations
 
 import asyncio
-import sys
-import threading
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Callable
+
+from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PyQt6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
+from PyQt6.QtCore import Qt
 
 from teleflow.utils.logger import logger
 
 if TYPE_CHECKING:
-    from PyQt6.QtWidgets import QApplication, QMainWindow
+    from PyQt6.QtWidgets import QMainWindow
+
 
 # ── Notification helpers ───────────────────────────────────────────────────────
 
-def _notify(title: str, message: str, timeout: int = 5) -> None:
-    """Show a desktop notification. Silent fallback if plyer is unavailable."""
-    try:
-        from plyer import notification
-        notification.notify(title=title, message=message, app_name="TeleFlow", timeout=timeout)
-    except Exception:
-        logger.debug(f"[Notify] {title}: {message}")
+_tray_ref: QSystemTrayIcon | None = None   # set by TrayManager.start()
+
+
+def _notify_qt(title: str, message: str, timeout_ms: int = 4000) -> None:
+    """Show notification via the Qt tray icon (thread-safe only from Qt thread)."""
+    if _tray_ref is not None and _tray_ref.isVisible():
+        try:
+            _tray_ref.showMessage(title, message,
+                                  QSystemTrayIcon.MessageIcon.Information,
+                                  timeout_ms)
+            return
+        except Exception:
+            pass
+    logger.debug(f"[Notify] {title}: {message}")
 
 
 async def _notify_if_enabled(event_key: str, title: str, message: str) -> None:
@@ -37,90 +52,97 @@ async def _notify_if_enabled(event_key: str, title: str, message: str) -> None:
         return
     if (await _db.get_setting(event_key, "1")) != "1":
         return
-    _notify(title, message)
+    _notify_qt(title, message)
+
+
+def _schedule_notify(event_key: str, title: str, message: str) -> None:
+    """Schedule a notification coroutine safely from any context."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.call_soon_threadsafe(
+                lambda: asyncio.ensure_future(_notify_if_enabled(event_key, title, message))
+            )
+        else:
+            asyncio.ensure_future(_notify_if_enabled(event_key, title, message))
+    except Exception:
+        pass
 
 
 def notify_send_success(chat_name: str) -> None:
-    asyncio.ensure_future(_notify_if_enabled("notify_success", "✅ TeleFlow",
-                                             f"Сообщение отправлено в {chat_name}"))
+    _schedule_notify("notify_success", "✅ TeleFlow", f"Сообщение отправлено в {chat_name}")
 
 
 def notify_send_error(chat_name: str, reason: str) -> None:
-    asyncio.ensure_future(_notify_if_enabled("notify_error", "❌ TeleFlow",
-                                             f"Ошибка отправки в {chat_name}: {reason}"))
+    _schedule_notify("notify_error", "❌ TeleFlow", f"Ошибка отправки в {chat_name}: {reason}")
 
 
 def notify_flood_wait(phone: str, seconds: int) -> None:
-    asyncio.ensure_future(_notify_if_enabled("notify_flood", "⏸ TeleFlow",
-                                             f"Аккаунт {phone} приостановлен на {seconds}с (FloodWait)"))
+    _schedule_notify("notify_flood", "⏸ TeleFlow",
+                     f"Аккаунт {phone} приостановлен на {seconds}с (FloodWait)")
 
 
 def notify_account_added(phone: str) -> None:
-    _notify("🔑 TeleFlow", f"Аккаунт {phone} добавлен")
+    _notify_qt("🔑 TeleFlow", f"Аккаунт {phone} добавлен")
 
 
 # ── TrayManager ───────────────────────────────────────────────────────────────
 
 class TrayManager:
     """
-    Manages the system tray icon.
+    Manages the system tray icon using Qt's QSystemTrayIcon.
 
-    - Supported on Windows and Linux/X11.
-    - Automatically disabled on Wayland (no XWayland) — app runs without tray.
-    - The tray runs in its own daemon thread so it doesn't block the Qt loop.
-    - Call stop() before process exit (connect to QApplication.aboutToQuit) to
-      cleanly terminate pystray's internal threads and avoid hanging on exit.
-
-    IMPORTANT: The event loop reference is captured at construction time
-    (main thread) and reused in tray callbacks. Never call asyncio.get_event_loop()
-    from the pystray thread — it will fail because pystray runs in a separate thread
-    with no asyncio event loop set.
+    - No extra dependencies (pystray/PIL not needed).
+    - Works on X11 and Wayland (with XWayland or libappindicator).
+    - Runs purely on the Qt main thread — no threading issues.
+    - Always installs a hide-on-close event so pressing X hides the window.
+      Use the «Выйти» button in the sidebar to actually quit.
     """
 
     def __init__(self, app: "QApplication", window: "QMainWindow") -> None:
         self._app    = app
         self._window = window
-        self._icon: Any = None  # pystray.Icon — typed as Any; pystray has no stubs
-        self._thread: threading.Thread | None = None
+        self._icon: QSystemTrayIcon | None = None
         self._available = False
-        # Capture the main event loop NOW, while we're in the main Qt/qasync thread.
-        # The pystray callbacks will use this reference via call_soon_threadsafe.
-        try:
-            self._loop: asyncio.AbstractEventLoop | None = asyncio.get_event_loop()
-        except RuntimeError:
-            self._loop = None
 
     def start(self) -> None:
-        """Try to start the tray icon. Silently no-ops if unavailable."""
-        if not self._can_use_tray():
-            logger.info("TrayManager: tray not available on this platform/session — skipping.")
-            return
-        try:
-            self._start_tray()
-            self._available = True
-            # Override close to hide instead of quit (only when tray works)
-            self._window.closeEvent = self._make_close_event()  # type: ignore[method-assign]
-        except Exception as e:
+        """Install hide-on-close and try to show a tray icon."""
+        # Always install: X hides, sidebar button quits.
+        self._window.closeEvent = self._make_close_event()  # type: ignore[method-assign]
+
+        if not QSystemTrayIcon.isSystemTrayAvailable():
             logger.info(
-                f"TrayManager: system tray unavailable ({type(e).__name__}: {e}) "
-                "— running without tray. Install a GNOME tray extension to enable it."
+                "TrayManager: QSystemTrayIcon — no system tray available. "
+                "Running without tray (use the Quit button in the sidebar to exit)."
             )
+            return
+
+        try:
+            self._icon = QSystemTrayIcon(self._build_qt_icon(), self._app)
+            self._icon.setToolTip("TeleFlow")
+            self._icon.setContextMenu(self._build_qt_menu())
+            # Double-click or left-click → show window
+            self._icon.activated.connect(self._on_tray_activated)
+            self._icon.show()
+            self._available = True
+            logger.info("TrayManager: QSystemTrayIcon started.")
+            # Expose for notification helpers
+            global _tray_ref
+            _tray_ref = self._icon
+        except Exception as e:
+            logger.warning(f"TrayManager: could not create QSystemTrayIcon ({e})")
             self._available = False
-            if self._icon is not None:
-                try:
-                    self._icon.stop()
-                except Exception:
-                    pass
-                self._icon = None
 
     def stop(self) -> None:
-        """Stop the tray icon and release its threads. Call before process exit."""
+        """Hide the tray icon. Call before process exit."""
+        global _tray_ref
+        _tray_ref = None
         if self._icon is not None:
             try:
-                self._icon.stop()
+                self._icon.hide()
             except Exception:
                 pass
-        self._icon = None
+            self._icon = None
         self._available = False
 
     @property
@@ -129,112 +151,46 @@ class TrayManager:
 
     # ── Internal ───────────────────────────────────────────────────────────────
 
-    def _can_use_tray(self) -> bool:
-        """Return True if pystray is importable and session likely supports it."""
-        import os  # noqa: PLC0415
-        try:
-            import pystray  # noqa: F401
-        except ImportError:
-            logger.info("TrayManager: pystray not installed — tray disabled.")
-            return False
+    def _build_qt_icon(self) -> QIcon:
+        """Render TeleFlow icon via QPainter (no PIL required)."""
+        from PyQt6.QtGui import QPixmap, QPainter, QColor, QBrush, QPen, QPolygon  # noqa: PLC0415
+        from PyQt6.QtCore import QPoint  # noqa: PLC0415
+        px = QPixmap(64, 64)
+        px.fill(Qt.GlobalColor.transparent)
+        p = QPainter(px)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QBrush(QColor(41, 182, 246)))
+        p.setPen(QPen(Qt.PenStyle.NoPen))
+        p.drawEllipse(2, 2, 60, 60)
+        p.setBrush(QBrush(QColor(255, 255, 255)))
+        p.drawPolygon(QPolygon([QPoint(20, 40), QPoint(44, 32), QPoint(20, 24)]))
+        p.end()
+        return QIcon(px)
 
-        if sys.platform.startswith("linux"):
-            desktop     = os.environ.get("XDG_CURRENT_DESKTOP", "").upper()
-            x_display   = os.environ.get("DISPLAY", "")
-            wayland_env = os.environ.get("WAYLAND_DISPLAY", "")
+    def _build_qt_menu(self) -> QMenu:
+        menu = QMenu()
+        act_show = menu.addAction("Показать TeleFlow")
+        act_show.triggered.connect(self._show_window)
+        menu.addSeparator()
+        act_quit = menu.addAction("Выход")
+        act_quit.triggered.connect(self._on_quit)
+        return menu
 
-            # GNOME has no system tray by default (neither on X11 nor Wayland).
-            if "GNOME" in desktop:
-                logger.info(
-                    "TrayManager: GNOME detected — system tray not available by default. "
-                    "Install 'AppIndicator and KStatusNotifierItem Support' GNOME extension to enable it."
-                )
-                return False
-
-            # Pure Wayland without any X server — xorg backend won't work
-            if wayland_env and not x_display:
-                logger.info("TrayManager: Wayland without DISPLAY — tray disabled.")
-                return False
-
-        return True
-
-    def _build_icon_image(self) -> Any:
-        """Build a simple PIL image for the tray icon."""
-        from PIL import Image, ImageDraw
-        img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        draw.ellipse([4, 4, 60, 60], fill=(41, 182, 246, 255))
-        draw.polygon([(20, 40), (44, 24), (44, 44)], fill=(255, 255, 255, 255))
-        return img
-
-    def _build_menu(self) -> Any:
-        """
-        Build the tray menu.
-
-        IMPORTANT: Capture self._loop here (set in __init__ from the main thread).
-        All callbacks will run in the pystray thread — use call_soon_threadsafe
-        to schedule work on the Qt/qasync event loop safely.
-        """
-        import pystray
-
-        loop = self._loop
-
-        def _show(_icon: Any, _item: Any) -> None:
-            if loop and loop.is_running():
-                loop.call_soon_threadsafe(self._show_window)
-
-        def _pause_all(_icon: Any, _item: Any) -> None:
-            logger.info("TrayManager: pause-all requested via tray")
-
-        def _quit(_icon: Any, _item: Any) -> None:
-            self.stop()
-            if loop and loop.is_running():
-                loop.call_soon_threadsafe(self._app.quit)
-
-        return pystray.Menu(
-            pystray.MenuItem("Показать TeleFlow", _show, default=True),
-            pystray.MenuItem("Поставить всё на паузу", _pause_all),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Выход", _quit),
-        )
-
-    def _start_tray(self) -> None:
-        import pystray
-        import time
-
-        image = self._build_icon_image()
-        menu  = self._build_menu()
-        self._icon = pystray.Icon("TeleFlow", image, "TeleFlow", menu)
-
-        _error: list[Exception] = []
-
-        original_run_detached = self._icon.run_detached
-
-        def _patched_run() -> None:
-            try:
-                original_run_detached()
-            except Exception as e:
-                _error.append(e)
-
-        self._icon.run_detached = _patched_run
-        self._icon.run_detached()
-
-        # Give the tray thread a moment to fail if it's going to
-        time.sleep(0.3)
-
-        if _error:
-            raise _error[0]
-
-        running = getattr(self._icon, "_running", True)
-        if not running:
-            raise RuntimeError("pystray icon failed to start (not running after 300ms)")
-
-        logger.info("TrayManager: tray icon started.")
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self._show_window()
 
     def _show_window(self) -> None:
         self._window.showNormal()
         self._window.raise_()
         self._window.activateWindow()
+
+    def _on_quit(self) -> None:
+        self.stop()
+        self._app.quit()
 
     def _make_close_event(self) -> Callable[..., None]:
         from PyQt6.QtGui import QCloseEvent
@@ -242,9 +198,14 @@ class TrayManager:
         def _close(event: QCloseEvent) -> None:
             event.ignore()
             self._window.hide()
-            if self._icon is not None:
+            if self._available and self._icon is not None:
                 try:
-                    self._icon.notify("TeleFlow работает в фоне")
+                    self._icon.showMessage(
+                        "TeleFlow",
+                        "TeleFlow работает в фоновом режиме",
+                        QSystemTrayIcon.MessageIcon.Information,
+                        3000,
+                    )
                 except Exception:
                     pass
 
