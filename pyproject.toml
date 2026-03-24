@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "teleflow"
-version = "0.1.0-alpha"
+version = "0.1.1-alpha"
 description = "TeleFlow - Desktop application for automated Telegram messaging"
 readme = "README.md"
 requires-python = ">=3.12"

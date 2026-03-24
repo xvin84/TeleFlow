@@ -84,8 +84,6 @@ class DashboardWindow(QMainWindow):
     def closeEvent(self, event: Any) -> None:
         # hideEvent — tray_manager intercepts close and hides. We only reach
         # this if tray_manager is NOT installed (shouldn't happen after Fix 1).
-        import asyncio as _asyncio
-        _asyncio.ensure_future(self.scheduler_manager.shutdown())
         event.accept()
 
     # ── Theme ─────────────────────────────────────────────────────────────────
@@ -510,8 +508,6 @@ class DashboardWindow(QMainWindow):
 
     def _on_quit(self) -> None:
         """Quit the application gracefully via the sidebar button."""
-        import asyncio as _asyncio
-        _asyncio.ensure_future(self.scheduler_manager.shutdown())
         from PyQt6.QtWidgets import QApplication
         QApplication.instance().quit()  # type: ignore[union-attr]
 

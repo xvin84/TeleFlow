@@ -844,7 +844,7 @@ asyncio = [
 
 [[package]]
 name = "teleflow"
-version = "0.1.0a0"
+version = "0.1.1a0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },

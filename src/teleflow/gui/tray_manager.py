@@ -153,7 +153,7 @@ class TrayManager:
 
     def _build_qt_icon(self) -> QIcon:
         """Render TeleFlow icon via QPainter (no PIL required)."""
-        from PyQt6.QtGui import QPixmap, QPainter, QColor, QBrush, QPen, QPolygon  # noqa: PLC0415
+        from PyQt6.QtGui import QPixmap, QPolygon  # noqa: PLC0415
         from PyQt6.QtCore import QPoint  # noqa: PLC0415
         px = QPixmap(64, 64)
         px.fill(Qt.GlobalColor.transparent)

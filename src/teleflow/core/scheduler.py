@@ -4,11 +4,16 @@ SchedulerManager — APScheduler 4.x в отдельном потоке.
 APScheduler 4.x использует anyio, который несовместим с qasync в одном
 event loop. Решение: запускаем scheduler в отдельном потоке со своим
 asyncio event loop. Взаимодействие через run_coroutine_threadsafe.
+
+Windows fix: используем WindowsSelectorEventLoopPolicy в потоке планировщика,
+потому что ProactorEventLoop (дефолт на Windows) не совместим с anyio/aiosqlite
+в этом контексте.
 """
 from __future__ import annotations
 
 import asyncio
 import random
+import sys
 import threading
 import uuid
 from datetime import datetime, timedelta
@@ -192,18 +197,31 @@ class SchedulerManager:
             target=self._thread_main, daemon=True, name="apscheduler"
         )
         self._thread.start()
-        if not self._ready.wait(timeout=5.0):
+        if not self._ready.wait(timeout=10.0):
             logger.error("APScheduler thread did not become ready in time!")
         else:
             logger.info("APScheduler 4.x started in background thread.")
 
     def _thread_main(self) -> None:
+        # ── Windows fix ───────────────────────────────────────────────────────
+        # On Windows the default event loop policy creates a ProactorEventLoop.
+        # anyio (used internally by APScheduler 4.x) and aiosqlite both work
+        # better with the SelectorEventLoop in this secondary thread context.
+        # Setting the policy here affects only this thread's new event loop.
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         try:
             self._loop.run_until_complete(self._run_scheduler())
+        except Exception as e:
+            logger.error(f"APScheduler thread crashed: {e}")
         finally:
-            self._loop.close()
+            try:
+                self._loop.close()
+            except Exception:
+                pass
             self._loop = None
 
     async def _run_scheduler(self) -> None:
@@ -242,15 +260,15 @@ class SchedulerManager:
         if not self._running:
             return
         self._running = False
-        if self._scheduler and self._loop:
+        if self._scheduler and self._loop and self._loop.is_running():
             fut = asyncio.run_coroutine_threadsafe(
                 self._scheduler.stop(), self._loop
             )
             try:
                 fut.result(timeout=5.0)
-            except Exception:
-                pass
-        if self._thread:
+            except Exception as e:
+                logger.warning(f"Scheduler stop error: {e}")
+        if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3.0)
         logger.info("APScheduler stopped.")
 

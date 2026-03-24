@@ -488,7 +488,7 @@ class MessageEditorWidget(QWidget):
         self.btn_code.clicked.connect(self._toggle_code)
 
         ly.addStretch()
-        self.lbl_char_count = QLabel(f"0 / 4096")
+        self.lbl_char_count = QLabel("0 / 4096")
         self.lbl_char_count.setStyleSheet(
             f"font-size: 11px; color: {TG_BASE_COLORS['text_muted']}; min-width: 64px;"
         )

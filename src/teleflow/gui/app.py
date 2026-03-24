@@ -85,6 +85,51 @@ class TeleFlowApp:
         # they're stopped cleanly, allowing single Ctrl+C to work.
         self.app.aboutToQuit.connect(tray.stop)
 
+    # ── Graceful shutdown ─────────────────────────────────────────────────────
+
+    async def cleanup(self) -> None:
+        """
+        Release all async resources after the Qt event loop has stopped.
+
+        Called by __main__.py via loop.run_until_complete() inside the
+        'with loop' block so the asyncio loop is still usable.
+
+        Order:
+          1. Stop APScheduler (so no more send-jobs fire)
+          2. Disconnect all Telethon clients  ← the main reason the process
+             used to hang; TCP sockets stay open unless we close them
+          3. Close the SQLite connection
+        """
+        logger.info("Running application cleanup…")
+
+        # 1. Scheduler
+        if self.dashboard is not None:
+            try:
+                await asyncio.wait_for(
+                    self.dashboard.scheduler_manager.shutdown(), timeout=3.0
+                )
+            except Exception as e:
+                logger.warning(f"Scheduler shutdown: {e}")
+
+        # 2. Telethon clients
+        if self.account_manager is not None:
+            for phone, client in list(self.account_manager.active_clients.items()):
+                try:
+                    await asyncio.wait_for(client.disconnect(), timeout=2.0)
+                    logger.info(f"Disconnected {phone}")
+                except Exception as e:
+                    logger.warning(f"Error disconnecting {phone}: {e}")
+
+        # 3. Database
+        try:
+            await db.close()
+        except Exception as e:
+            logger.warning(f"DB close error: {e}")
+
+        logger.info("Cleanup complete.")
+
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
     async def _ensure_app_salt(self) -> bytes:
         salt_hex = await db.get_setting("app_salt")
         if salt_hex:
