@@ -241,10 +241,20 @@ class SchedulerManager:
             # Delete from teleflow.db on the main event loop
             if self._main_loop and self._main_loop.is_running():
                 from teleflow.core.storage.db import db  # noqa: PLC0415
+                
+                async def _cleanup_if_one_time() -> None:
+                    try:
+                        cursor = await db.execute("SELECT mode FROM schedules WHERE id = ?", (schedule_id,))
+                        row = await cursor.fetchone()
+                        if row and row["mode"] == "one_time":
+                            await db.delete_schedule(schedule_id)
+                            logger.info(f"Cleaned up one_time schedule {schedule_id} after execution.")
+                    except Exception as e:
+                        logger.error(f"Error cleaning up schedule {schedule_id}: {e}")
+
                 asyncio.run_coroutine_threadsafe(
-                    db.delete_schedule(schedule_id), self._main_loop
+                    _cleanup_if_one_time(), self._main_loop
                 )
-                logger.info(f"Cleaned up one_time schedule {schedule_id} after execution.")
 
         try:
             async with self._scheduler:

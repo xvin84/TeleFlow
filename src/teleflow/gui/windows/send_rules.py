@@ -703,11 +703,12 @@ class SendRulesDialog(QDialog):
         if chat_type in ("channel", "group"):
             tg_chat_id = chat_data.get("chat_id")
             if tg_chat_id and not await self._check_can_send(tg_chat_id):
-                QMessageBox.warning(
+                # FIX: use QTimer to avoid locking up qasync event loop with nested Qt event loop
+                QTimer.singleShot(0, lambda: QMessageBox.warning(
                     self, "Нет прав",
                     f"Нет прав для отправки в «{chat_data.get('title', str(tg_chat_id))}».\n"
                     "Убедитесь, что вы являетесь администратором с правом отправки сообщений."
-                )
+                ))
                 return
 
         rows = await self.message_manager.get_assigned_chats_for_message(self.msg_id)
@@ -842,10 +843,10 @@ class SendRulesDialog(QDialog):
 
         assigned = await self.message_manager.get_assigned_chats_for_message(self.msg_id)
         if not [a for a in assigned if a.get("is_active")]:
-            QMessageBox.warning(
+            QTimer.singleShot(0, lambda: QMessageBox.warning(
                 self, "Нет чатов",
                 "Добавьте хотя бы один чат в левой панели."
-            )
+            ))
             return
 
         self.btn_send_now.setEnabled(False)
@@ -857,9 +858,10 @@ class SendRulesDialog(QDialog):
             await sender.send_message_now(
                 self.client, self.phone, self.msg_id, text, media_raw
             )
-            QMessageBox.information(self, "✅ Готово", "Сообщение отправлено во все назначенные чаты!")
+            QTimer.singleShot(0, lambda: QMessageBox.information(self, "✅ Готово", "Сообщение отправлено во все назначенные чаты!"))
         except Exception as e:
-            QMessageBox.warning(self, "Ошибка отправки", str(e))
+            err_msg = str(e)
+            QTimer.singleShot(0, lambda: QMessageBox.warning(self, "Ошибка отправки", err_msg))
         finally:
             self.btn_send_now.setEnabled(True)
             self.btn_send_now.setText("⚡  Отправить сейчас")

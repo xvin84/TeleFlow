@@ -3,7 +3,7 @@ import json as _json
 from datetime import datetime
 from typing import Any
 
-from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtCore import Qt, QPoint, QTimer
 from PyQt6.QtGui import QCursor, QColor, QTextDocument
 from PyQt6.QtWidgets import (
     QDialog, QFrame, QHBoxLayout, QHeaderView, QLabel,
@@ -718,14 +718,14 @@ class DashboardWindow(QMainWindow):
             return
         client = self.account_manager.active_clients.get(self.current_phone)
         if not client:
-            QMessageBox.warning(self, t("app.warning"), t("dashboard.account_not_connected"))
+            QTimer.singleShot(0, lambda: QMessageBox.warning(self, t("app.warning"), t("dashboard.account_not_connected")))
             return
         self.msg_editor.btn_send_now.setEnabled(False)
         self.msg_editor.btn_send_now.setText(t("dashboard.sending"))
         try:
             assigned = await self.message_manager.get_assigned_chats_for_message(msg_id)
             if not [a for a in assigned if a.get("is_active")]:
-                QMessageBox.warning(self, t("dashboard.error"), t("dashboard.no_chats_assigned"))
+                QTimer.singleShot(0, lambda: QMessageBox.warning(self, t("dashboard.error"), t("dashboard.no_chats_assigned")))
                 return
             paths = self.msg_editor.media_gallery.get_paths()
             media_raw = _json.dumps(paths) if paths else None
@@ -737,9 +737,10 @@ class DashboardWindow(QMainWindow):
 
             await self.sender_engine.send_message_now(
                 client, self.current_phone, msg_id, text, media_raw)  # type: ignore[arg-type]
-            QMessageBox.information(self, t("dashboard.send_done"), t("dashboard.send_done_msg"))
+            QTimer.singleShot(0, lambda: QMessageBox.information(self, t("dashboard.send_done"), t("dashboard.send_done_msg")))
         except Exception as e:
-            QMessageBox.warning(self, t("dashboard.error"), str(e))
+            err_msg = str(e)
+            QTimer.singleShot(0, lambda: QMessageBox.warning(self, t("dashboard.error"), err_msg))
         finally:
             self.msg_editor.btn_send_now.setEnabled(True)
             self.msg_editor.btn_send_now.setText(t("messages.btn_send_now_short"))

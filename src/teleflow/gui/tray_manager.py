@@ -57,12 +57,19 @@ async def _notify_if_enabled(event_key: str, title: str, message: str) -> None:
 
 def _schedule_notify(event_key: str, title: str, message: str) -> None:
     """Schedule a notification coroutine safely from any context."""
+    import threading
     try:
-        loop = asyncio.get_event_loop()
+        from teleflow.core.dispatch import _main_loop
+        # Prefer the explicitly set main Qt loop if available
+        loop = _main_loop or asyncio.get_event_loop()
+        
         if loop.is_running():
-            loop.call_soon_threadsafe(
-                lambda: asyncio.ensure_future(_notify_if_enabled(event_key, title, message))
-            )
+            if threading.current_thread() is threading.main_thread():
+                # Avoid call_soon_threadsafe inside the same running loop to prevent qasync re-entrancy bugs
+                loop.create_task(_notify_if_enabled(event_key, title, message))
+            else:
+                # Schedule coroutine across thread bounds
+                asyncio.run_coroutine_threadsafe(_notify_if_enabled(event_key, title, message), loop)
         else:
             asyncio.ensure_future(_notify_if_enabled(event_key, title, message))
     except Exception:
